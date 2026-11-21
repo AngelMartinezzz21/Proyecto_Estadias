@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Escolar Universitario</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Indicador de Carga Global -->
+    <div id="loader" class="hidden">
+        <div class="spinner"></div>
+        <p>Procesando...</p>
+    </div>
+
+
+    <div id="view-login" class="view active">
+        <div class="login-bg"></div>
+        <div class="login-panel glass">
+            <h1 class="text-primary">Bienvenido</h1>
+            <form id="form-login">
+                <div class="input-group">
+                    <label for="login-user">Usuario (Matrícula)</label>
+                    <input type="text" id="login-user" required>
+                </div>
+                <div class="input-group">
+                    <label for="login-pass">Contraseña</label>
+                    <div class="pass-wrapper">
+                        <input type="password" id="login-pass" required>
+                        <span id="toggle-pass">👁</span>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary" id="btn-entrar">ENTRAR</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- PANTALLA ADMIN -->
+    <div id="view-admin" class="view hidden">
+        <div class="top-bar">
+            <h2>Panel de Administración</h2>
+            <div class="user-info">
+                <strong>Bienvenido Administrador</strong>
+                <span id="reloj-admin" class="reloj"></span>
+                <a href="#" class="btn-salir" onclick="cerrarSesion(); return false;">Terminar sesión</a>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" id="btn-tab-horarios" onclick="switchTab('tab-horarios', this)">Gestión de Horarios y Maestros</button>
+            <button class="tab-btn" id="btn-tab-alumnos" onclick="switchTab('tab-alumnos', this)">Registro de Alumnos</button>
+        </div>
+
+        <!-- TAB HORARIOS -->
+        <div id="tab-horarios" class="tab-content active">
+            <div class="panel-izq form-panel">
+                <h3 class="text-primary">Captura de Horarios y Docente</h3>
+                
+                <div class="foto-preview-container">
+                    <div id="admin-foto-preview" class="avatar"><span style="font-size: 12px; color: #95A5A6;">Sin foto</span></div>
+                    <label class="btn-secondary file-label">
+                        Seleccionar Imagen
+                        <input type="file" id="admin-foto" accept="image/*" class="hidden-input">
+                    </label>
+                </div>
+
+                <form id="form-horarios">
+                    <input type="hidden" id="horario-id">
+                    <div class="input-group">
+                        <label for="admin-maestro">Maestro:</label>
+                        <input type="text" id="admin-maestro" required list="lista-maestros" placeholder="Nombre completo del docente...">
+                        <datalist id="lista-maestros"></datalist>
+                    </div>
+                    <div class="input-group">
+                        <label for="admin-turno">Turno:</label>
+                        <select id="admin-turno" required>
+                            <option value="Matutino">Matutino</option>
+                            <option value="Nocturno">Nocturno</option>
+                            <option value="Ambos">Ambos</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label for="admin-correo">Correo Institucional:</label>
+                        <input type="email" id="admin-correo" required placeholder="maestro@universidad.edu.mx">
+                    </div>
+                    <div class="input-group">
+                        <label for="admin-telefono">Número Telefónico (Opcional):</label>
+                        <input type="tel" id="admin-telefono" placeholder="Ej. 8112345678">
+                    </div>
+                    <div class="input-group">
+                        <label for="admin-materia">Materia:</label>
+                        <input type="text" id="admin-materia" required list="lista-materias" placeholder="Nombre de la asignatura...">
+                        <datalist id="lista-materias"></datalist>
+                    </div>
+                    <div class="input-group">
+                        <label for="admin-salon">Salón / Aula:</label>
+                        <input type="text" id="admin-salon" required list="lista-salones" placeholder="Ej. Aula 104 / Lab 2">
+                        <datalist id="lista-salones"></datalist>
+                    </div>
+                    <div class="input-group">
+                        <label for="admin-dia">Día:</label>
+                        <select id="admin-dia" required>
+                            <option value="">Seleccione...</option>
+                            <option value="Lunes">Lunes</option>
+                            <option value="Martes">Martes</option>
+                            <option value="Miércoles">Miércoles</option>
+                            <option value="Jueves">Jueves</option>
+                            <option value="Viernes">Viernes</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label for="admin-hora">Hora:</label>
+                        <select id="admin-hora" required>
+                            <option value="">Seleccione...</option>
+                            <option value="07:10 - 08:00">07:10 - 08:00</option>
+                            <option value="08:00 - 08:50">08:00 - 08:50</option>
+                            <option value="08:50 - 09:40">08:50 - 09:40</option>
+                            <option value="09:40 - 10:30">09:40 - 10:30</option>
+                            <option value="10:30 - 11:20">10:30 - 11:20</option>
+                            <option value="11:20 - 12:10">11:20 - 12:10</option>
+                            <option value="12:10 - 13:00">12:10 - 13:00</option>
+                            <option value="13:00 - 13:50">13:00 - 13:50</option>
+                        </select>
+                    </div>
+                    <div class="btn-group">
+                        <button type="submit" class="btn-success" id="btn-guardar-hr">GUARDAR</button>
+                        <button type="button" class="btn-primary" id="btn-actualizar-hr">ACTUALIZAR</button>
+                        <button type="button" class="btn-muted" id="btn-limpiar-hr">LIMPIAR</button>
+                        <button type="button" class="btn-danger" id="btn-eliminar-hr">ELIMINAR</button>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="panel-der table-panel">
+                <div class="panel-header-row">
+                    <div>
+                        <h3 class="text-primary">Listado General de Horarios y Maestros</h3>
+                        <small id="contador-horarios" class="text-muted">0 registros encontrados</small>
+                    </div>
+                    <div class="search-box search-compact">
+                        <input type="text" id="search-horarios-admin" placeholder="Filtrar por maestro, correo, materia...">
+                    </div>
+                </div>
+                <div class="table-container mt-10">
+                    <table id="tabla-horarios">
+                        <thead>
+                            <tr>
+                                <th>ID</th><th>Maestro</th><th>Turno</th><th>Correo</th><th>Teléfono</th><th>Materia</th><th>Salón</th><th>Día</th><th>Hora</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB ALUMNOS -->
+        <div id="tab-alumnos" class="tab-content hidden">
+            <div class="panel-izq form-panel">
+                <h3 class="text-primary">Registro de Alumnos</h3>
+                <form id="form-alumnos">
+                    <div class="input-group">
+                        <label for="admin-alumno-nombre">Nombre Completo:</label>
+                        <input type="text" id="admin-alumno-nombre" required placeholder="Nombre y apellidos...">
+                    </div>
+                    <div class="input-group">
+                        <label for="admin-alumno-matricula">Matrícula:</label>
+                        <input type="text" id="admin-alumno-matricula" required placeholder="Ej. 2023001">
+                        <small class="text-muted">* La matrícula funcionará como el Usuario y Contraseña del alumno.</small>
+                    </div>
+                    <div class="btn-group-vertical">
+                        <button type="submit" class="btn-success">GUARDAR / ACTUALIZAR</button>
+                        <div class="btn-group">
+                            <button type="button" class="btn-muted" id="btn-limpiar-al">LIMPIAR</button>
+                            <button type="button" class="btn-danger" id="btn-eliminar-al">ELIMINAR</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="panel-der table-panel">
+                <div class="panel-header-row">
+                    <div>
+                        <h3 class="text-primary">Listado de Alumnos Registrados</h3>
+                        <small id="contador-alumnos" class="text-muted">0 alumnos registrados</small>
+                    </div>
+                    <div class="search-box search-compact">
+                        <input type="text" id="search-alumnos-admin" placeholder="Buscar alumno...">
+                    </div>
+                </div>
+                <div class="table-container mt-10">
+                    <table id="tabla-alumnos">
+                        <thead>
+                            <tr><th>Matrícula</th><th>Nombre del Alumno</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANTALLA ALUMNO -->
+    <div id="view-alumno" class="view hidden">
+        <div class="top-bar">
+            <h2>Directorio Académico</h2>
+            <div class="user-info">
+                <strong id="alumno-welcome">Bienvenido Alumno</strong>
+                <span id="reloj-alumno" class="reloj"></span>
+                <a href="#" class="btn-salir" onclick="cerrarSesion(); return false;">Terminar sesión</a>
+            </div>
+        </div>
+
+        <div class="content-alumno">
+            <div class="panel-izq directory-panel">
+                <div class="search-box">
+                    <input type="text" id="search-directorio" placeholder="Buscar por maestro, materia o salón...">
+                </div>
+                <div class="directory-meta">
+                    <small class="text-muted">Haz clic para ver información o doble clic para ver el horario</small>
+                    <small id="contador-directorio" class="text-secondary"></small>
+                </div>
+                <div class="table-container mt-10">
+                    <table id="tabla-directorio">
+                        <thead>
+                            <tr><th>Nombre del Maestro</th><th>Turno / Materia(s)</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel-der preview-panel">
+                <div id="preview-avatar" class="avatar-large"><span style="font-size: 14px; color: #95A5A6;">Sin foto</span></div>
+                <h3 id="preview-nombre" class="text-hint">Selecciona un maestro</h3>
+                <div id="preview-data" class="hidden">
+                    <div class="preview-info-card">
+                        <p id="preview-salon-actual" class="salon-realtime-box"><strong>Salón actual:</strong><br><span class="badge-libre">Calculando...</span></p>
+                        <p id="preview-turno"><strong>Turno:</strong> --</p>
+                        <p id="preview-correo"><strong>Correo:</strong> --</p>
+                        <p id="preview-telefono"><strong>Teléfono:</strong> --</p>
+                        <p id="preview-materias"><strong>Materias:</strong> --</p>
+                        <p id="preview-salones"><strong>Salones asignados:</strong> --</p>
+                    </div>
+                    <button type="button" id="btn-ver-calendario" class="btn-primary mt-10">Ver Horario Completo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CALENDARIO -->
+    <div id="modal-calendario" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-titulo">Horario Asignado</h2>
+            </div>
+            <div class="modal-body">
+                <table class="calendario-grid">
+                    <thead>
+                        <tr>
+                            <th>HORA</th><th>LUNES</th><th>MARTES</th><th>MIÉRCOLES</th><th>JUEVES</th><th>VIERNES</th>
+                        </tr>
+                    </thead>
+                    <tbody id="calendario-body">
+                        <!-- Generado por JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-danger" id="btn-cerrar-modal" onclick="cerrarModalCalendario()">Cerrar Horario</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
