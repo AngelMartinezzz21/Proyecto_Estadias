@@ -8,6 +8,9 @@ let directorioMemoria = [];
 let maestroSeleccionadoDirectorio = null;
 let turnoFiltroDirectorio = 'Todos';
 let clasesMaestroSeleccionado = [];
+const fotosCache = new Map();
+let maestrosMemoria = [];
+let maestroFile = null;
 
 const SIN_FOTO_ADMIN = '<span style="font-size: 12px; color: #95A5A6;">Sin foto</span>';
 const SIN_FOTO_ALUMNO = '<span style="font-size: 14px; color: #95A5A6;">Sin foto</span>';
@@ -36,6 +39,31 @@ const HORAS_NOCTURNO = [
 // --- UTILIDADES, TOASTS Y MODAL DE CONFIRMACIÓN ---
 const showLoader = () => document.getElementById('loader').classList.remove('hidden');
 const hideLoader = () => document.getElementById('loader').classList.add('hidden');
+
+const authFetch = async (url, options = {}) => {
+    const sesionGuardada = sessionStorage.getItem('sesionActiva');
+    let token = null;
+    if (sesionGuardada) {
+        try {
+            token = JSON.parse(sesionGuardada).token;
+        } catch (e) {}
+    }
+
+    const headers = { ...(options.headers || {}) };
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(url, { ...options, headers });
+
+    if (res.status === 401) {
+        mostrarNotificacion('Tu sesión ha expirado. Inicia sesión nuevamente.', 'warning');
+        cerrarSesion();
+        throw new Error('No autorizado');
+    }
+
+    return res;
+};
 
 const escapeHTML = (str) => {
     if (str === null || str === undefined) return '';
@@ -236,13 +264,20 @@ const switchTab = (tabId, btnElement) => {
 
 const iniciarReloj = () => {
     const opciones = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+    let ultimoMinuto = -1;
+
     const tick = () => {
-        const str = new Date().toLocaleDateString('es-ES', opciones);
+        const ahora = new Date();
+        const str = ahora.toLocaleDateString('es-ES', opciones);
         const rAdmin = document.getElementById('reloj-admin');
         const rAlumno = document.getElementById('reloj-alumno');
         if (rAdmin) rAdmin.innerText = str;
         if (rAlumno) rAlumno.innerText = str;
-        actualizarSalonEnVivo();
+
+        if (ahora.getMinutes() !== ultimoMinuto) {
+            ultimoMinuto = ahora.getMinutes();
+            actualizarSalonEnVivo();
+        }
     };
     tick();
     setInterval(tick, 1000);
@@ -270,10 +305,16 @@ const cerrarModalCalendario = () => {
     document.getElementById('modal-calendario').classList.add('hidden');
 };
 
+const cerrarPreviewMovil = () => {
+    const previewPanel = document.querySelector('.preview-panel');
+    if (previewPanel) previewPanel.classList.remove('mobile-open');
+};
+
 const cerrarSesion = () => {
     sessionStorage.removeItem('sesionActiva');
     sessionStorage.removeItem('adminTabActiva');
     cerrarModalCalendario();
+    cerrarPreviewMovil();
     toggleView('view-login');
     document.getElementById('form-login').reset();
 };
@@ -282,11 +323,15 @@ const aplicarSesion = (sesion) => {
     if (sesion.role === 'admin') {
         toggleView('view-admin');
         const tabGuardada = sessionStorage.getItem('adminTabActiva') || 'tab-horarios';
-        const btnTab = tabGuardada === 'tab-alumnos' 
-            ? document.getElementById('btn-tab-alumnos') 
-            : document.getElementById('btn-tab-horarios');
+        const mapaTabs = {
+            'tab-horarios': 'btn-tab-horarios',
+            'tab-maestros': 'btn-tab-maestros',
+            'tab-alumnos': 'btn-tab-alumnos'
+        };
+        const btnTab = document.getElementById(mapaTabs[tabGuardada] || 'btn-tab-horarios');
         switchTab(tabGuardada, btnTab);
         cargarTablaHorarios();
+        cargarTablaMaestros();
         cargarTablaAlumnos();
     } else {
         resetearVistaAlumno();
@@ -302,7 +347,7 @@ const restaurarSesion = () => {
 
     try {
         const sesion = JSON.parse(sesionGuardada);
-        if (sesion && sesion.role) {
+        if (sesion && sesion.role && sesion.token) {
             aplicarSesion(sesion);
         }
     } catch (e) {
@@ -360,7 +405,7 @@ document.getElementById('form-login').addEventListener('submit', async (e) => {
         const data = await res.json();
         
         if (data.success) {
-            const sesion = { role: data.role, nombre: data.nombre };
+            const sesion = { role: data.role, nombre: data.nombre, token: data.token };
             sessionStorage.setItem('sesionActiva', JSON.stringify(sesion));
             aplicarSesion(sesion);
             mostrarNotificacion(`Sesión iniciada como ${data.nombre}`, 'success');
@@ -368,7 +413,8 @@ document.getElementById('form-login').addEventListener('submit', async (e) => {
             mostrarNotificacion(data.message || 'Credenciales incorrectas', 'error');
         }
     } catch (error) {
-        mostrarNotificacion('Error de conexión al servidor.', 'error');
+    console.error(error);
+    mostrarNotificacion('Error de conexión al servidor.', 'error');
     } finally {
         btn.disabled = false; hideLoader();
     }
@@ -526,7 +572,7 @@ document.getElementById('admin-maestro').addEventListener('input', async (e) => 
 
         if (!horarioFile) {
             try {
-                const resFoto = await fetch(`${API_URL}/directorio/foto/${encodeURIComponent(maestroEncontrado.maestro)}`);
+                const resFoto = await authFetch(`${API_URL}/directorio/foto/${encodeURIComponent(maestroEncontrado.maestro)}`);
                 const dataFoto = await resFoto.json();
                 if (dataFoto.foto) {
                     document.getElementById('admin-foto-preview').innerHTML = `<img src="${dataFoto.foto}" alt="Docente">`;
@@ -597,7 +643,7 @@ const renderizarTablaHorarios = (datos) => {
             
             showLoader();
             try {
-                const resFoto = await fetch(`${API_URL}/horarios/foto/${encodeURIComponent(row.id)}`);
+                const resFoto = await authFetch(`${API_URL}/horarios/foto/${encodeURIComponent(row.id)}`);
                 const dataFoto = await resFoto.json();
                 document.getElementById('admin-foto-preview').innerHTML = dataFoto.foto ? `<img src="${dataFoto.foto}" alt="Foto">` : SIN_FOTO_ADMIN;
             } catch (err) {
@@ -613,7 +659,7 @@ const renderizarTablaHorarios = (datos) => {
 const cargarTablaHorarios = async () => {
     showLoader();
     try {
-        const res = await fetch(`${API_URL}/horarios`);
+        const res = await authFetch(`${API_URL}/horarios`);
         const data = await res.json();
         horariosMemoria = Array.isArray(data) ? data : [];
         
@@ -682,9 +728,10 @@ document.getElementById('form-horarios').addEventListener('submit', async (e) =>
 
     showLoader();
     try {
-        const res = await fetch(`${API_URL}/horarios`, { method: 'POST', body: formData });
+        const res = await authFetch(`${API_URL}/horarios`, { method: 'POST', body: formData });
         const data = await res.json();
         if (res.ok) {
+            if (horarioFile) fotosCache.delete(document.getElementById('admin-maestro').value.trim());
             mostrarNotificacion('Clase y datos del maestro guardados correctamente', 'success');
             limpiarFormHorarios();
             await cargarTablaHorarios();
@@ -701,7 +748,9 @@ document.getElementById('form-horarios').addEventListener('submit', async (e) =>
 document.getElementById('btn-actualizar-hr').addEventListener('click', async () => {
     const id = document.getElementById('horario-id').value;
     if (!id) return mostrarNotificacion('Selecciona un registro de la tabla.', 'warning');
-    
+    const formHorarios = document.getElementById('form-horarios');
+    if (!formHorarios.reportValidity()) return;
+
     const formData = new FormData();
     formData.append('maestro', document.getElementById('admin-maestro').value.trim());
     formData.append('turno', document.getElementById('admin-turno').value);
@@ -715,9 +764,10 @@ document.getElementById('btn-actualizar-hr').addEventListener('click', async () 
 
     showLoader();
     try {
-        const res = await fetch(`${API_URL}/horarios/${encodeURIComponent(id)}`, { method: 'PUT', body: formData });
+        const res = await authFetch(`${API_URL}/horarios/${encodeURIComponent(id)}`, { method: 'PUT', body: formData });
         const data = await res.json();
         if (res.ok) {
+            if (horarioFile) fotosCache.delete(document.getElementById('admin-maestro').value.trim());
             mostrarNotificacion('Registro actualizado correctamente', 'success');
             limpiarFormHorarios();
             await cargarTablaHorarios();
@@ -740,7 +790,7 @@ document.getElementById('btn-eliminar-hr').addEventListener('click', async () =>
 
     showLoader();
     try {
-        const res = await fetch(`${API_URL}/horarios/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        const res = await authFetch(`${API_URL}/horarios/${encodeURIComponent(id)}`, { method: 'DELETE' });
         if (res.ok) {
             mostrarNotificacion('Registro eliminado', 'success');
             limpiarFormHorarios();
@@ -757,6 +807,7 @@ document.getElementById('btn-eliminar-hr').addEventListener('click', async () =>
 const limpiarFormAlumnos = () => {
     document.getElementById('form-alumnos').reset();
     document.querySelectorAll('#tabla-alumnos tr').forEach(tr => tr.classList.remove('selected'));
+    document.getElementById('alumno-matricula-original').value = '';
 };
 document.getElementById('btn-limpiar-al').addEventListener('click', limpiarFormAlumnos);
 
@@ -783,6 +834,7 @@ const renderizarTablaAlumnos = (datos) => {
             tr.classList.add('selected');
             document.getElementById('admin-alumno-matricula').value = row.matricula;
             document.getElementById('admin-alumno-nombre').value = row.nombre;
+            document.getElementById('alumno-matricula-original').value = row.matricula;
         };
         tbody.appendChild(tr);
     });
@@ -790,7 +842,7 @@ const renderizarTablaAlumnos = (datos) => {
 
 const cargarTablaAlumnos = async () => {
     try {
-        const res = await fetch(`${API_URL}/alumnos`);
+        const res = await authFetch(`${API_URL}/alumnos`);
         const data = await res.json();
         alumnosMemoria = Array.isArray(data) ? data : [];
         const filtro = (document.getElementById('search-alumnos-admin')?.value || '').toLowerCase().trim();
@@ -803,7 +855,9 @@ const cargarTablaAlumnos = async () => {
         } else {
             renderizarTablaAlumnos(alumnosMemoria);
         }
-    } catch (e) {}
+    } catch (e) {
+    mostrarNotificacion('Error cargando la lista de alumnos', 'error');
+}
 };
 
 const inputSearchAlumnos = document.getElementById('search-alumnos-admin');
@@ -820,19 +874,26 @@ if (inputSearchAlumnos) {
 
 document.getElementById('form-alumnos').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const matriculaOriginal = document.getElementById('alumno-matricula-original').value.trim();
     const matricula = document.getElementById('admin-alumno-matricula').value.trim();
     const nombre = document.getElementById('admin-alumno-nombre').value.trim();
 
+    const esEdicion = Boolean(matriculaOriginal);
+    const url = esEdicion
+        ? `${API_URL}/alumnos/${encodeURIComponent(matriculaOriginal)}`
+        : `${API_URL}/alumnos`;
+    const method = esEdicion ? 'PUT' : 'POST';
+
     showLoader();
     try {
-        const res = await fetch(`${API_URL}/alumnos`, {
-            method: 'POST',
+        const res = await authFetch(url, {
+            method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ matricula, nombre })
         });
         const data = await res.json();
         if (res.ok && data.success) {
-            mostrarNotificacion('Alumno guardado correctamente', 'success');
+            mostrarNotificacion(data.message || 'Alumno guardado correctamente', 'success');
             limpiarFormAlumnos();
             await cargarTablaAlumnos();
         } else {
@@ -854,7 +915,7 @@ document.getElementById('btn-eliminar-al').addEventListener('click', async () =>
 
     showLoader();
     try {
-        const res = await fetch(`${API_URL}/alumnos/${encodeURIComponent(matricula)}`, { method: 'DELETE' });
+        const res = await authFetch(`${API_URL}/alumnos/${encodeURIComponent(matricula)}`, { method: 'DELETE' });
         const data = await res.json();
         if (res.ok && data.success) {
             mostrarNotificacion('Alumno eliminado', 'success');
@@ -923,7 +984,7 @@ const cargarDirectorio = async () => {
     inicializarBotonesFiltroTurno();
     showLoader();
     try {
-        const res = await fetch(`${API_URL}/directorio`);
+        const res = await authFetch(`${API_URL}/directorio`);
         const data = await res.json();
         directorioMemoria = Array.isArray(data) ? data : [];
         aplicarFiltrosDirectorio();
@@ -954,6 +1015,9 @@ const renderizarDirectorio = (datos) => {
         tr.innerHTML = `<td>${escapeHTML(row.maestro)}</td><td><span class="badge-proxima" style="font-size:10px; padding:1px 5px;">${escapeHTML(row.turno || 'Matutino')}</span> ${escapeHTML(row.materias || '--')}</td>`;
         
         tr.onclick = async () => {
+            if (window.innerWidth <= 960) {
+            document.querySelector('.preview-panel')?.classList.add('mobile-open');
+            }
             document.querySelectorAll('#tabla-directorio tr').forEach(t => t.classList.remove('selected'));
             tr.classList.add('selected');
             maestroSeleccionadoDirectorio = row.maestro;
@@ -1014,23 +1078,29 @@ const renderizarDirectorio = (datos) => {
             document.getElementById('preview-salones').innerHTML = `<strong>Salones asignados:</strong> ${escapeHTML(row.salones || '--')}`;
 
             try {
-                const resClases = await fetch(`${API_URL}/directorio/calendario/${encodeURIComponent(row.maestro.trim())}`);
-                const dataClases = await res.json();
+                const resClases = await authFetch(`${API_URL}/directorio/calendario/${encodeURIComponent(row.maestro.trim())}`);
+                const dataClases = await resClases.json();
                 clasesMaestroSeleccionado = Array.isArray(dataClases) ? dataClases : [];
                 actualizarSalonEnVivo();
             } catch (err) {
                 clasesMaestroSeleccionado = [];
             }
 
-            showLoader();
-            try {
-                const res = await fetch(`${API_URL}/directorio/foto/${encodeURIComponent(row.maestro)}`);
-                const fotoData = await res.json();
-                document.getElementById('preview-avatar').innerHTML = fotoData.foto ? `<img src="${fotoData.foto}" alt="Foto">` : SIN_FOTO_ALUMNO;
-            } catch (err) {
-                document.getElementById('preview-avatar').innerHTML = SIN_FOTO_ALUMNO;
-            } finally {
-                hideLoader();
+           if (fotosCache.has(row.maestro)) {
+                const fotoGuardada = fotosCache.get(row.maestro);
+                document.getElementById('preview-avatar').innerHTML = fotoGuardada ? `<img src="${fotoGuardada}" alt="Foto">` : SIN_FOTO_ALUMNO;
+            } else {
+                showLoader();
+                try {
+                    const res = await authFetch(`${API_URL}/directorio/foto/${encodeURIComponent(row.maestro)}`);
+                    const fotoData = await res.json();
+                    fotosCache.set(row.maestro, fotoData.foto || null);
+                    document.getElementById('preview-avatar').innerHTML = fotoData.foto ? `<img src="${fotoData.foto}" alt="Foto">` : SIN_FOTO_ALUMNO;
+                } catch (err) {
+                    document.getElementById('preview-avatar').innerHTML = SIN_FOTO_ALUMNO;
+                } finally {
+                    hideLoader();
+                }
             }
         };
 
@@ -1052,6 +1122,55 @@ document.getElementById('search-directorio').addEventListener('input', aplicarFi
 const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
 const colores = ["#C0392B", "#2980B9", "#D35400", "#27AE60", "#8E44AD", "#16A085", "#F39C12"];
 
+const diasCortos = ["Lun", "Mar", "Mié", "Jue", "Vie"];
+
+const renderizarCalendarioMovil = (clases, asignacionColores) => {
+    const tabsContainer = document.getElementById('dias-tabs-movil');
+    const listaContainer = document.getElementById('clases-dia-movil');
+    if (!tabsContainer || !listaContainer) return;
+
+    const hoyJs = new Date().getDay(); // 1=Lun ... 5=Vie
+    let diaActivoIdx = (hoyJs >= 1 && hoyJs <= 5) ? hoyJs - 1 : 0;
+
+    const mostrarDia = (idx) => {
+        diaActivoIdx = idx;
+        tabsContainer.querySelectorAll('.dia-tab-btn').forEach((btn, i) => {
+            btn.classList.toggle('active', i === idx);
+        });
+
+        const diaNombre = dias[idx];
+        const clasesDia = clases
+            .filter(c => normalizarTexto(c.dia) === normalizarTexto(diaNombre))
+            .sort((a, b) => convertirHoraAMinutos(String(a.hora).split('-')[0]) - convertirHoraAMinutos(String(b.hora).split('-')[0]));
+
+        if (clasesDia.length === 0) {
+            listaContainer.innerHTML = `<div class="sin-clases-movil">Sin clases registradas para el ${escapeHTML(diaNombre)}</div>`;
+            return;
+        }
+
+        listaContainer.innerHTML = clasesDia.map(c => {
+            const color = asignacionColores[c.materia] || '#1A5276';
+            return `
+                <div class="clase-card-movil" style="background-color: ${color};">
+                    <div class="clase-hora">${escapeHTML(c.hora)}</div>
+                    <div class="clase-materia">${escapeHTML(c.materia)}</div>
+                    <div class="clase-salon">Salón: ${escapeHTML(c.salon)}</div>
+                </div>
+            `;
+        }).join('');
+    };
+
+    tabsContainer.innerHTML = diasCortos
+        .map((d, i) => `<button type="button" class="dia-tab-btn" data-idx="${i}">${d}</button>`)
+        .join('');
+
+    tabsContainer.querySelectorAll('.dia-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => mostrarDia(Number(btn.dataset.idx)));
+    });
+
+    mostrarDia(diaActivoIdx);
+};
+
 const abrirCalendario = async (maestro) => {
     if (!maestro) return;
     document.getElementById('modal-titulo').innerText = `Horario Asignado: ${maestro}`;
@@ -1065,7 +1184,7 @@ const abrirCalendario = async (maestro) => {
         if (maestroSeleccionadoDirectorio === maestro && Array.isArray(clasesMaestroSeleccionado) && clasesMaestroSeleccionado.length > 0) {
             clases = clasesMaestroSeleccionado;
         } else {
-            const res = await fetch(`${API_URL}/directorio/calendario/${encodeURIComponent(maestro.trim())}`);
+            const res = await authFetch(`${API_URL}/directorio/calendario/${encodeURIComponent(maestro.trim())}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const dataClases = await res.json();
             clases = Array.isArray(dataClases) ? dataClases : [];
@@ -1118,7 +1237,7 @@ const abrirCalendario = async (maestro) => {
                 }
             }
         });
-
+        renderizarCalendarioMovil(clases, asignacionColores);
         document.getElementById('modal-calendario').classList.remove('hidden');
     } catch (e) {
         console.error("Detalle del error en calendario:", e);
@@ -1135,5 +1254,202 @@ document.getElementById('modal-calendario').addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') cerrarModalCalendario();
 });
+
+// --- ADMIN: CATÁLOGO DE MAESTROS ---
+document.getElementById('maestro-foto')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!FORMATOS_IMAGEN_VALIDOS.includes(file.type)) {
+        mostrarNotificacion('Formato no válido. Usa JPG, PNG o WEBP.', 'warning');
+        e.target.value = ''; maestroFile = null; return;
+    }
+    if (file.size > MAX_TAMANO_ORIGEN_MB * 1024 * 1024) {
+        mostrarNotificacion(`La imagen supera los ${MAX_TAMANO_ORIGEN_MB} MB permitidos.`, 'warning');
+        e.target.value = ''; maestroFile = null; return;
+    }
+    try {
+        const resultado = await procesarYComprimirImagen(file);
+        maestroFile = resultado.file;
+        document.getElementById('maestro-foto-preview').innerHTML = `<img src="${resultado.preview}" alt="Foto">`;
+        mostrarNotificacion('Imagen optimizada lista para guardar', 'success');
+    } catch (error) {
+        mostrarNotificacion(error.message || 'Error al procesar la imagen', 'error');
+        e.target.value = ''; maestroFile = null;
+    }
+});
+
+const limpiarFormMaestros = () => {
+    document.getElementById('form-maestros')?.reset();
+    document.getElementById('maestro-id').value = '';
+    document.getElementById('maestro-foto').value = '';
+    document.getElementById('maestro-foto-preview').innerHTML = SIN_FOTO_ADMIN;
+    maestroFile = null;
+    document.querySelectorAll('#tabla-maestros tr').forEach(tr => tr.classList.remove('selected'));
+};
+document.getElementById('btn-limpiar-mt')?.addEventListener('click', limpiarFormMaestros);
+
+const renderizarTablaMaestros = (datos) => {
+    const tbody = document.querySelector('#tabla-maestros tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const lista = Array.isArray(datos) ? datos : [];
+    const idSel = document.getElementById('maestro-id').value;
+
+    const contador = document.getElementById('contador-maestros');
+    if (contador) contador.innerText = `${lista.length} ${lista.length === 1 ? 'docente registrado' : 'docentes registrados'}`;
+
+    if (lista.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-row">No hay docentes registrados</td></tr>`;
+        return;
+    }
+
+    lista.forEach(row => {
+        const tr = document.createElement('tr');
+        if (String(row.id) === String(idSel)) tr.classList.add('selected');
+        tr.innerHTML = `
+            <td>${escapeHTML(row.id)}</td>
+            <td>${escapeHTML(row.nombre_maestro)}</td>
+            <td>${escapeHTML(row.turno)}</td>
+            <td>${escapeHTML(row.correo_institucional)}</td>
+            <td>${escapeHTML(row.telefono || '--')}</td>
+            <td>${escapeHTML(row.total_clases)}</td>
+        `;
+        tr.onclick = async () => {
+            document.querySelectorAll('#tabla-maestros tr').forEach(t => t.classList.remove('selected'));
+            tr.classList.add('selected');
+            document.getElementById('maestro-id').value = row.id;
+            document.getElementById('mt-nombre').value = row.nombre_maestro;
+            document.getElementById('mt-turno').value = row.turno || 'Matutino';
+            document.getElementById('mt-correo').value = row.correo_institucional || '';
+            document.getElementById('mt-telefono').value = row.telefono || '';
+            document.getElementById('maestro-foto').value = '';
+            maestroFile = null;
+
+            showLoader();
+            try {
+                const resFoto = await authFetch(`${API_URL}/maestros/foto/${encodeURIComponent(row.id)}`);
+                const dataFoto = await resFoto.json();
+                document.getElementById('maestro-foto-preview').innerHTML = dataFoto.foto ? `<img src="${dataFoto.foto}" alt="Foto">` : SIN_FOTO_ADMIN;
+            } catch (err) {
+                document.getElementById('maestro-foto-preview').innerHTML = SIN_FOTO_ADMIN;
+            } finally {
+                hideLoader();
+            }
+        };
+        tbody.appendChild(tr);
+    });
+};
+
+const cargarTablaMaestros = async () => {
+    try {
+        const res = await authFetch(`${API_URL}/maestros`);
+        const data = await res.json();
+        maestrosMemoria = Array.isArray(data) ? data : [];
+        const filtro = (document.getElementById('search-maestros-admin')?.value || '').toLowerCase().trim();
+        const filtrados = filtro ? maestrosMemoria.filter(m =>
+            (m.nombre_maestro && m.nombre_maestro.toLowerCase().includes(filtro)) ||
+            (m.correo_institucional && m.correo_institucional.toLowerCase().includes(filtro))
+        ) : maestrosMemoria;
+        renderizarTablaMaestros(filtrados);
+    } catch (e) {
+        mostrarNotificacion('Error cargando catálogo de maestros', 'error');
+    }
+};
+
+document.getElementById('search-maestros-admin')?.addEventListener('input', (e) => {
+    const text = e.target.value.toLowerCase().trim();
+    const filtrados = maestrosMemoria.filter(m =>
+        (m.nombre_maestro && m.nombre_maestro.toLowerCase().includes(text)) ||
+        (m.correo_institucional && m.correo_institucional.toLowerCase().includes(text))
+    );
+    renderizarTablaMaestros(filtrados);
+});
+
+document.getElementById('form-maestros')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (document.getElementById('maestro-id').value) {
+        return mostrarNotificacion('Utiliza el botón Actualizar para modificar este docente.', 'warning');
+    }
+    const formData = new FormData();
+    formData.append('nombre_maestro', document.getElementById('mt-nombre').value.trim());
+    formData.append('turno', document.getElementById('mt-turno').value);
+    formData.append('correo_institucional', document.getElementById('mt-correo').value.trim());
+    formData.append('telefono', document.getElementById('mt-telefono').value.trim());
+    if (maestroFile) formData.append('foto', maestroFile);
+
+    showLoader();
+    try {
+        const res = await authFetch(`${API_URL}/maestros`, { method: 'POST', body: formData });
+        const data = await res.json();
+        if (res.ok) {
+            mostrarNotificacion(data.message || 'Docente guardado', 'success');
+            limpiarFormMaestros();
+            await cargarTablaMaestros();
+        } else {
+            mostrarNotificacion(data.message || 'Error al guardar docente', 'error');
+        }
+    } catch (err) {
+        mostrarNotificacion('Error de conexión', 'error');
+    } finally {
+        hideLoader();
+    }
+});
+
+document.getElementById('btn-actualizar-mt')?.addEventListener('click', async () => {
+    const id = document.getElementById('maestro-id').value;
+    if (!id) return mostrarNotificacion('Selecciona un docente de la tabla.', 'warning');
+    if (!document.getElementById('form-maestros').reportValidity()) return;
+
+    const nombre = document.getElementById('mt-nombre').value.trim();
+    const formData = new FormData();
+    formData.append('nombre_maestro', nombre);
+    formData.append('turno', document.getElementById('mt-turno').value);
+    formData.append('correo_institucional', document.getElementById('mt-correo').value.trim());
+    formData.append('telefono', document.getElementById('mt-telefono').value.trim());
+    if (maestroFile) formData.append('foto', maestroFile);
+
+    showLoader();
+    try {
+        const res = await authFetch(`${API_URL}/maestros/${encodeURIComponent(id)}`, { method: 'PUT', body: formData });
+        const data = await res.json();
+        if (res.ok) {
+            if (maestroFile) fotosCache.delete(nombre);
+            mostrarNotificacion(data.message || 'Docente actualizado', 'success');
+            limpiarFormMaestros();
+            await cargarTablaMaestros();
+            await cargarTablaHorarios();
+        } else {
+            mostrarNotificacion(data.message || 'Error al actualizar docente', 'error');
+        }
+    } catch (err) {
+        mostrarNotificacion('Error de conexión', 'error');
+    } finally {
+        hideLoader();
+    }
+});
+
+document.getElementById('btn-eliminar-mt')?.addEventListener('click', async () => {
+    const id = document.getElementById('maestro-id').value;
+    if (!id) return mostrarNotificacion('Selecciona un docente de la tabla.', 'warning');
+    const confirmado = await mostrarConfirmacion('¿Deseas eliminar este docente del catálogo?');
+    if (!confirmado) return;
+
+    showLoader();
+    try {
+        const res = await authFetch(`${API_URL}/maestros/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+            mostrarNotificacion(data.message || 'Docente eliminado', 'success');
+            limpiarFormMaestros();
+            await cargarTablaMaestros();
+        } else {
+            mostrarNotificacion(data.message || 'No se pudo eliminar', 'warning');
+        }
+    } catch (err) {
+        mostrarNotificacion('Error al eliminar docente', 'error');
+    } finally {
+        hideLoader();
+    }
+}); 
 
 restaurarSesion();

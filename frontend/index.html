@@ -47,7 +47,8 @@
         </div>
 
         <div class="tabs">
-            <button class="tab-btn active" id="btn-tab-horarios" onclick="switchTab('tab-horarios', this)">Gestión de Horarios y Maestros</button>
+            <button class="tab-btn active" id="btn-tab-horarios" onclick="switchTab('tab-horarios', this)">Gestión de Horarios</button>
+            <button class="tab-btn" id="btn-tab-maestros" onclick="switchTab('tab-maestros', this)">Catálogo de Maestros</button>
             <button class="tab-btn" id="btn-tab-alumnos" onclick="switchTab('tab-alumnos', this)">Registro de Alumnos</button>
         </div>
 
@@ -71,6 +72,7 @@
                         <input type="text" id="admin-maestro" required list="lista-maestros" placeholder="Nombre completo del docente...">
                         <datalist id="lista-maestros"></datalist>
                     </div>
+                    <div class="form-row-2">
                     <div class="input-group">
                         <label for="admin-turno">Turno:</label>
                         <select id="admin-turno" required>
@@ -80,13 +82,15 @@
                         </select>
                     </div>
                     <div class="input-group">
-                        <label for="admin-correo">Correo Institucional:</label>
-                        <input type="email" id="admin-correo" required placeholder="maestro@universidad.edu.mx">
-                    </div>
-                    <div class="input-group">
                         <label for="admin-telefono">Número Telefónico (Opcional):</label>
                         <input type="tel" id="admin-telefono" placeholder="Ej. 8112345678">
                     </div>
+                    </div>                    
+                    <div class="input-group">
+                        <label for="admin-correo">Correo Institucional:</label>
+                        <input type="email" id="admin-correo" required placeholder="maestro@universidad.edu.mx">
+                    </div>
+                    <div class="form-row-2">
                     <div class="input-group">
                         <label for="admin-materia">Materia:</label>
                         <input type="text" id="admin-materia" required list="lista-materias" placeholder="Nombre de la asignatura...">
@@ -97,6 +101,8 @@
                         <input type="text" id="admin-salon" required list="lista-salones" placeholder="Ej. Aula 104 / Lab 2">
                         <datalist id="lista-salones"></datalist>
                     </div>
+                    </div>
+                    <div class="form-row-2">
                     <div class="input-group">
                         <label for="admin-dia">Día:</label>
                         <select id="admin-dia" required>
@@ -121,6 +127,7 @@
                             <option value="12:10 - 13:00">12:10 - 13:00</option>
                             <option value="13:00 - 13:50">13:00 - 13:50</option>
                         </select>
+                    </div>
                     </div>
                     <div class="btn-group">
                         <button type="submit" class="btn-success" id="btn-guardar-hr">GUARDAR</button>
@@ -154,11 +161,80 @@
             </div>
         </div>
 
+        <!-- TAB MAESTROS -->
+        <div id="tab-maestros" class="tab-content hidden">
+            <div class="panel-izq form-panel">
+                <h3 class="text-primary">Catálogo de Maestros</h3>
+                <div class="foto-preview-container">
+                    <div id="maestro-foto-preview" class="avatar"><span style="font-size: 12px; color: #95A5A6;">Sin foto</span></div>
+                    <label class="btn-secondary file-label">
+                        Seleccionar Imagen
+                        <input type="file" id="maestro-foto" accept="image/*" class="hidden-input">
+                    </label>
+                </div>
+
+                <form id="form-maestros">
+                    <input type="hidden" id="maestro-id">
+                    <div class="input-group">
+                        <label for="mt-nombre">Nombre Completo:</label>
+                        <input type="text" id="mt-nombre" required placeholder="Nombre completo del docente...">
+                    </div>
+                    <div class="form-row-2">
+                        <div class="input-group">
+                            <label for="mt-turno">Turno:</label>
+                            <select id="mt-turno" required>
+                                <option value="Matutino">Matutino</option>
+                                <option value="Nocturno">Nocturno</option>
+                                <option value="Ambos">Ambos</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="mt-telefono">Teléfono (Opcional):</label>
+                            <input type="tel" id="mt-telefono" placeholder="Ej. 8112345678">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="mt-correo">Correo Institucional:</label>
+                        <input type="email" id="mt-correo" required placeholder="maestro@upapnl.edu.mx">
+                    </div>
+                    <div class="btn-group">
+                        <button type="submit" class="btn-success" id="btn-guardar-mt">GUARDAR</button>
+                        <button type="button" class="btn-primary" id="btn-actualizar-mt">ACTUALIZAR</button>
+                        <button type="button" class="btn-muted" id="btn-limpiar-mt">LIMPIAR</button>
+                        <button type="button" class="btn-danger" id="btn-eliminar-mt">ELIMINAR</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="panel-der table-panel">
+                <div class="panel-header-row">
+                    <div>
+                        <h3 class="text-primary">Docentes Registrados</h3>
+                        <small id="contador-maestros" class="text-muted">0 docentes registrados</small>
+                    </div>
+                    <div class="search-box search-compact">
+                        <input type="text" id="search-maestros-admin" placeholder="Buscar docente o correo...">
+                    </div>
+                </div>
+                <div class="table-container mt-10">
+                    <table id="tabla-maestros">
+                        <thead>
+                            <tr>
+                                <th>ID</th><th>Nombre</th><th>Turno</th><th>Correo</th><th>Teléfono</th><th>Clases</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- TAB ALUMNOS -->
         <div id="tab-alumnos" class="tab-content hidden">
             <div class="panel-izq form-panel">
                 <h3 class="text-primary">Registro de Alumnos</h3>
                 <form id="form-alumnos">
+                    <input type="hidden" id="alumno-matricula-original">
                     <div class="input-group">
                         <label for="admin-alumno-nombre">Nombre Completo:</label>
                         <input type="text" id="admin-alumno-nombre" required placeholder="Nombre y apellidos...">
@@ -230,6 +306,7 @@
             </div>
 
             <div class="panel-der preview-panel">
+                <button type="button" id="btn-cerrar-preview" class="btn-cerrar-preview" onclick="cerrarPreviewMovil()" aria-label="Cerrar">&times;</button>
                 <div id="preview-avatar" class="avatar-large"><span style="font-size: 14px; color: #95A5A6;">Sin foto</span></div>
                 <h3 id="preview-nombre" class="text-hint">Selecciona un maestro</h3>
                 <div id="preview-data" class="hidden">
@@ -254,6 +331,10 @@
                 <h2 id="modal-titulo">Horario Asignado</h2>
             </div>
             <div class="modal-body">
+                <div id="calendario-movil" class="calendario-movil">
+                <div id="dias-tabs-movil" class="dias-tabs"></div>
+                <div id="clases-dia-movil" class="clases-dia-movil"></div>
+             </div>
                 <table class="calendario-grid">
                     <thead>
                         <tr>
